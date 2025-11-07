@@ -32,6 +32,33 @@
         };
       }
     });
+    
+    let NetWorks = [];
+    
+    const originalFetch = window.fetch;
+    window.fetch = async function(input, init) {
+      let url = (typeof input === "string") ? input : input.url;
+      let method = (init && init.method) ? init.method : "GET";
+    
+      let safeUrl = url.split("?")[0];
+      if (url.includes("?")) safeUrl += "?...";
+    
+      NetWorks.push({ type: "fetch", method, url: safeUrl });
+      console.log("[fetch]", method, safeUrl);
+    
+      return originalFetch.apply(this, arguments);
+    };
+    
+    const originalOpen = XMLHttpRequest.prototype.open;
+    XMLHttpRequest.prototype.open = function(method, url, async, user, password) {
+      let safeUrl = url.split("?")[0];
+      if (url.includes("?")) safeUrl += "?...";
+    
+      NetWorks.push({ type: "xhr", method, url: safeUrl });
+      console.log("[XHR]", method, safeUrl);
+    
+      return originalOpen.apply(this, arguments);
+    };
 
     window.addEventListener("DOMContentLoaded", () => {
       const INSPECTOR_Z = 2147483647;
