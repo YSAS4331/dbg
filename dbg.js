@@ -181,7 +181,7 @@
       };
 
       let currentEl = null; 
-      let FPS = 30; // 初期FPS
+      let FPS = 30; 
       let realtimeMode = false;
       let lastUpdate = 0;
       let pending = false;
@@ -395,7 +395,7 @@
         }
       }
 
-      // --- FPS切り替え ---
+      
       function toggleFPS() {
         realtimeMode = !realtimeMode;
         if (realtimeMode) {
@@ -447,9 +447,9 @@
 
       window.addEventListener("mousemove", (e) => {updatePanelSide(e.clientX)});
 
-      // --- hoverベース更新（デフォルト） ---
+      
       window.addEventListener("mouseover", e => {
-        if (realtimeMode) return; // リアルタイム時は無効化
+        if (realtimeMode) return; 
         const el = e.target;
         if (!el || el === highlight || el === panel || panel.contains(el)) return;
         const rect = el.getBoundingClientRect();
@@ -457,24 +457,23 @@
         renderInfo(el, rect, { x: e.clientX, y: e.clientY });
       });
 
-      // --- スクロール時だけ再描画 ---
+      
       window.addEventListener("scroll", () => {
         if (currentEl) renderHighlight(currentEl.getBoundingClientRect());
       }, { passive: true });
 
-      // --- ショートカットキー登録 ---
+      
       window.addEventListener("keydown", e => {
-        // Alt + D = MDN
+        
         if (e.altKey && e.key.toLowerCase() === "d" && currentEl) {
           window.open(MDNLink, "_blank");
         }
         
-        // Alt + W = Window / Embed
+        
         if (e.altKey && e.key.toLowerCase() === "w") {
           toggleDisplay();
         }
 
-        // Ctrl + Alt + F = FPSトグル
         if (e.ctrlKey && e.altKey && e.key.toLowerCase() === "f") {
           toggleFPS();
         }
