@@ -33,14 +33,6 @@
       }
     });
 
-
-    const thisScript = document.currentScript;
-    if (!thisScript) return;
-    try {
-      const url = new URL(thisScript.src, window.location.href);
-      if (url.searchParams.get("db") !== "tr") return;
-    } catch { return; }
-
     window.addEventListener("DOMContentLoaded", () => {
       const INSPECTOR_Z = 2147483647;
 
