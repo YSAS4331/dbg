@@ -24,6 +24,7 @@
       detail: {
         key,
         path: path.join("."),
+        module: moduleName,
         oldValue,
         newValue: value,
         timestamp: Date.now()
@@ -100,6 +101,29 @@
           }).join("");
           Win.document.querySelector('#log').innerHTML = htmlLogs;
         }
+        break;
+      case 'highlight':
+        if (Win && !Win.closed) {
+          Win.document.getElementById('HIGHLIGHT').href = `https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/${newValue}.min.css`
+        }
+        break;
+      case 'theme':
+        if (Win && !Win.closed) {
+          const root = Win.document.documentElement;
+      
+          if (newValue === 'Device') {
+            const mediaTheme = window.matchMedia('(prefers-color-scheme: dark)');
+            const applyTheme = e => root.classList.toggle('dark', e.matches);
+            applyTheme(mediaTheme);
+            if (!mediaTheme._listenerAdded) {
+              mediaTheme.addEventListener('change', applyTheme);
+              mediaTheme._listenerAdded = true;
+            }
+          } else {
+            root.classList.toggle('dark', newValue === 'Dark');
+          }
+        }
+        break;
       default:
         break;
     }
@@ -381,6 +405,10 @@
             break;
           case 'playCode':
             (()=>{try {const result=Function(e.data?.code)();if(result)console.log(result)}catch(e){console.error(e);}})();
+            break;
+          case 'API':
+            API[e.data?.root].set(e.data?.key, e.data?.value);
+            break;
           default:
             break;
         }
@@ -425,188 +453,373 @@
           let inner_HTML = document.documentElement.outerHTML.replace(/<div[^>]*id=["']DBG_PANEL["'][^>]*>[\s\S]*?<\/div>/gi, "").replace(/</g, "&lt;").replace(/>/g, "&gt;")
           Win.document.open();
           Win.document.write(`
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <title>Dev Tools - ${document.title}</title>
-  <meta charset="UTF-8">
-  <style>
-    body,html{padding:0;margin:0;width:100vw;min-height:100vh;font-family:"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:#f9fafc;color:#333;}
-    a,.show-a{color:#0078d7;text-decoration:none;cursor:pointer;background:none;border:none;padding:0;}
-    a:hover,.show-a:hover{text-decoration:underline;}
-    #tab{display:flex;align-items:center;width:100%;height:48px;position:sticky;top:0;background:linear-gradient(90deg,#ffffff,#f3f6fa);z-index:1000;box-shadow:0 2px 6px rgba(0,0,0,0.08);}
-    #tab>*{flex:1;text-align:center;cursor:pointer;min-width:max(13%,75px);max-width:min(20%,150px);height:100%;border:none;background:transparent;font-weight:500;color:#555;transition:all 0.3s ease;}
-    #tab>*:hover{background:rgba(0,120,21Fo5,0.08);color:#0078d7;}
-    #tab>*.active{border-bottom:3px solid #0078d7;font-weight:bold;color:#0078d7;}
-    pre{white-space:pre-wrap;word-wrap:break-word;background:#fff;padding:16px;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.06);}
-    #content .Console{box-sizing:border-box;padding:16px;background:#ffffff;color:#222;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono",monospace;line-height:1.5;overflow-y:visible;overflow-x:hidden;border-radius:8px;box-shadow:inset 0 0 0 1px rgba(0,0,0,0.05);}
-    #content .Console div,#log{box-sizing:border-box;display:flex;flex-direction:column;gap:4px 12px;align-items:start;padding:10px 12px;margin:0 0 12px 0;border-left:4px solid transparent;background:#fdfdfd;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,0.06);transition:transform 0.2s ease,background 0.2s ease;}
-    #content .Console div:hover,#log:hover{background:#f7f9fc;transform:translateY(-2px);}
-    #content .Console div p,#log p{margin:0;grid-column:1/2;grid-row:1/2;white-space:pre-wrap;word-break:break-word;}
-    #content .Console div time,#log time{grid-column:2/3;grid-row:1/2;color:#666;font-size:12px;white-space:nowrap;}
-    #content .Console div .at,#log .at{grid-column:1/3;grid-row:2/3;color:#888;font-size:12px;margin-top:4px;border-top:1px dashed rgba(0,0,0,0.12);padding-top:4px;}
-    #content .Console div.log,#log.log{border-left-color:#0078d7;}
-    #content .Console div.info,#log.info{border-left-color:#2b88d8;}
-    #content .Console div.warn,#log.warn{border-left-color:#f2c744;background:#fffbe6;}
-    #content .Console div.error,#log.error{border-left-color:#e81123;background:#fff0f0;}
-    .text-wrapper{color:#333;font-size:16px;display:block;width:90%;position:sticky;top:0;z-index:500;}
-    .text-wrapper::after{content:'';position:absolute;bottom:0;left:0;width:0;height:2px;background:#0078d7;transition:width 0.4s ease;}
-    .text-wrapper:has(textarea:focus)::after{width:100%;z-index:500;}
-    #playCode{width:100%;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:14px;line-height:1.5;padding:12px;border:none;background:#f5f5f5;color:#222;box-shadow:inset 0 1px 3px rgba(0,0,0,0.06);transition:background 0.5s ease;resize:none;outline:none;}
-    #playCode:focus{background:#fdfdfd;}
+          <!DOCTYPE html>
+          <html lang="en">
+            <head>
+              <title>Dev Tools - ${document.title}</title>
+              <meta charset="UTF-8">
+              <style>
+              :root{--accent:#4fa3ff;--card:#ffffff;--text-main:#333;--text-sub:#555;--text-muted:#666;--text-light:#888;--bg-main:#f9fafc;--bg-body:#f2f4f8;--bg-white:#ffffff;--bg-white-2:#f3f6fa;--bg-hover:#f7f9fc;--bg-warn:#fffbe6;--bg-error:#fff0f0;--bg-code:#f5f5f5;--bg-code-focus:#fdfdfd;--border-log:#0078d7;--border-info:#2b88d8;--border-warn:#f2c744;--border-error:#e81123;}
+              html.dark {--accent:#4fa3ff; --card:#1e1e1e; --text-main:#e0e0e0; --text-sub:#c0c0c0; --text-muted:#a0a0a0; --text-light:#888;--bg-main:#121212; --bg-body:#181818; --bg-white:#1e1e1e;--bg-white-2:#383838;--bg-hover:#222; --bg-warn:#3a2f00; --bg-error:#3a0000;--bg-code:#1a1a1a; --bg-code-focus:#222; --border-log:#4fa3ff; --border-info:#2b88d8; --border-warn:#f2c744; --border-error:#e81123;}
+              body,html{padding:0;margin:0;min-width:100vw;min-height:100vh;font-family:"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg-main);color:var(--text-main);}
+              a,.show-a{color:var(--border-log);text-decoration:none;cursor:pointer;background:none;border:none;padding:0;}
+              a:hover,.show-a:hover{text-decoration:underline;}
+              #tab{display:flex;align-items:center;width:100%;height:48px;position:sticky;top:0;background:linear-gradient(90deg,var(--bg-white),var(--bg-white-2));z-index:1000;box-shadow:0 2px 6px rgba(0,0,0,0.08);}
+              #tab>*{flex:1;text-align:center;cursor:pointer;min-width:max(13%,75px);max-width:min(20%,150px);height:100%;border:none;background:transparent;font-weight:500;color:var(--text-sub);transition:all 0.3s ease;}
+              #tab>*:hover{background:rgba(0,120,215,0.08);color:var(--border-log);}
+              #tab>*.active{border-bottom:3px solid var(--border-log);font-weight:bold;color:var(--border-log);}
+              pre{white-space:pre-wrap;word-wrap:break-word;background:var(--bg-white);padding:16px;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.06);}
+              #content .Console{box-sizing:border-box;padding:16px;background:var(--bg-white);color:var(--text-main);font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono",monospace;line-height:1.5;overflow-y:visible;overflow-x:hidden;border-radius:8px;box-shadow:inset 0 0 0 1px rgba(0,0,0,0.05);}
+              #content .Console div,#log{box-sizing:border-box;display:flex;flex-direction:column;gap:4px 12px;align-items:start;padding:10px 12px;margin:0 0 12px 0;border-left:4px solid transparent;background:var(--bg-white);border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,0.06);transition:transform 0.2s ease,background 0.2s ease;}
+              #content .Console div:hover,#log:hover{background:var(--bg-hover);transform:translateY(-2px);}
+              #content .Console div p,#log p{margin:0;grid-column:1/2;grid-row:1/2;white-space:pre-wrap;word-break:break-word;}
+              #content .Console div time,#log time{grid-column:2/3;grid-row:1/2;color:var(--text-muted);font-size:12px;white-space:nowrap;}
+              #content .Console div .at,#log .at{grid-column:1/3;grid-row:2/3;color:var(--text-light);font-size:12px;margin-top:4px;border-top:1px dashed rgba(0,0,0,0.12);padding-top:4px;}
+              #content .Console div.log,#log.log{border-left-color:var(--border-log);}
+              #content .Console div.info,#log.info{border-left-color:var(--border-info);}
+              #content .Console div.warn,#log.warn{border-left-color:var(--border-warn);background:var(--bg-warn);}
+              #content .Console div.error,#log.error{border-left-color:var(--border-error);background:var(--bg-error);}
+              .text-wrapper{color:var(--text-main);font-size:16px;display:block;width:90%;position:sticky;top:0;z-index:500;}
+              .text-wrapper::after{content:'';position:absolute;bottom:0;left:0;width:0;height:2px;background:var(--border-log);transition:width 0.4s ease;}
+              .text-wrapper:has(textarea:focus)::after{width:100%;z-index:500;}
+              #playCode{width:100%;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:14px;line-height:1.5;padding:12px;border:none;background:var(--bg-code);color:var(--text-main);box-shadow:inset 0 1px 3px rgba(0,0,0,0.06);transition:background 0.5s ease;resize:none;outline:none;}
+              #playCode:focus{background:var(--bg-code-focus);}
+              body{background:var(--bg-body);color:var(--text-main);font-family:ui-sans-serif,system-ui;}
+              .select{position:relative;width:260px;background:var(--card);color:var(--text-main);padding:0.6rem 1rem;border-radius:10px;cursor:pointer;user-select:none;}
+              .select-dis{display:flex;justify-content:space-between;align-items:center;}
+              .select-arrow{transition:transform 0.25s;}
+              .open .select-arrow{transform:rotate(180deg);}
+              .option{position:absolute;top:calc(100% + 5px);left:0;width:100%;background:var(--card);color:var(--text-main);border-radius:10px;padding:5px 0;box-shadow:0 6px 18px rgba(0,0,0,0.35);display:none;z-index:20;max-height:200px;overflow-x:hidden;overflow-y:auto;}
+              .open .option{display:block;}
+              .option label{display:block;padding:0.6rem 1rem;cursor:pointer;}
+              .option label:hover{background:rgba(79,163,255,0.15);}
+              .option label.active{background:rgba(79,163,255,0.35);}
+              .option .select-search {position:sticky;top:0;z-index:1;background:var(--bg-body);margin:0;}
+              input[type="text"]{position:relative;width:260px;max-width:100%;background:var(--card);color:var(--text-main);padding:0.6rem 1rem;border-radius:10px;border:2px solid transparent;outline:none;user-select:none;transition:border-color 0.25s,box-shadow 0.25s;}
+              input[type="text"]:not(.NoBorder):focus{border-color:rgba(79,163,255,0.6);box-shadow:0 0 0 3px rgba(79,163,255,0.25);}
+              input[type="text"]::placeholder{color:var(--text-sub);opacity:0.7;}
+              input[type="text"]:disabled{background:var(--card-disabled);color:var(--text-disabled);cursor:not-allowed;}
+              </style>
+              <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/${API.setting.get('highlight')}.min.css" id="HIGHLIGHT">
+              <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
+            </head>
+            <body>
+              <div>Dev Tools for &quot;<button id='toParent' class='show-a'>${document.title}</button>&quot;</div>
+              <nav id="tab" role="tablist">
+                <button role="tab" class="Elements" draggable="true">Elements</button>
+                <button role="tab" class="Console" draggable="true">Console</button>
+                <button role="tab" class="Network" draggable="true">Network</button>
+                <button role="tab" class="Selected" draggable="true">Selected</button>
+                <button role="tab" class="Info" draggable="true">Info</button>
+                <button role="tab" class="Events" draggable="true">Events</button>
+                <button role="tab" class="Setting" draggable="true">Setting</button>
+              </nav>
+              <div id="content">
+                <div class="Elements"><pre><code class="language-html">&lt;!DOCTYPE html&gt;\n${document.documentElement.outerHTML.replace(/<div[^>]*id=["']DBG_PANEL["'][^>]*>[\s\S]*?<\/div>/gi, "").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</code></pre></div>
+                <div class="Console"><label class="text-wrapper"><textarea id="playCode"></textarea></label><div id="log">${htmlLogs}</div></div>
+                <div class="Network">under implementation</div>
+                <div class="Selected">No Element Selected</div>
+                <div class="Info">
+                  <h2>dbg.min.js Tool Information</h2>
+                  <p><strong>dbg.min.js</strong> is a lightweight in‑browser debugging utility. 
+                  It helps developers inspect DOM elements, monitor events, track network requests, 
+                  and capture console logs without relying on the built‑in browser DevTools.</p>
+                
+                  <h3>Main Features</h3>
+                  <ul>
+                    <li>Inspect DOM elements and view attributes, styles, and dataset values</li>
+                    <li>List registered event listeners on elements</li>
+                    <li>Monitor <code>fetch</code> and XHR network requests</li>
+                    <li>Capture and review console logs</li>
+                    <li>Open a dedicated DevTools window for detailed inspection</li>
+                  </ul>
+                
+                  <h3>Keyboard Shortcuts</h3>
+                  <ul>
+                    <li><kbd>Alt + D</kbd> — Open MDN documentation for the selected element</li>
+                    <li><kbd>Alt + W</kbd> — Open the DevTools window</li>
+                    <li><kbd>Ctrl + Alt + F</kbd> — Toggle hover/live mode</li>
+                  </ul>
+                
+                  <h3>Use Cases</h3>
+                  <ul>
+                    <li>Quickly check if CSS styles are applied as expected</li>
+                    <li>Verify that event listeners are correctly attached</li>
+                    <li>Debug network activity without switching to browser DevTools</li>
+                    <li>Log and review application state during development</li>
+                  </ul>
 
-    /* プルダウン */
-    .pulldownParent {display:flex;margin:0;align-items:center;position:relative;}
-    .pulldown {padding:5px;margin:0;border:3px solid black;border-radius:5px;user-select:none;cursor:pointer;}
-    .pulldown .menuParent {position:relative;}
-    .pulldown .menuParent > * {display:none;padding:5px 12px;}
-    .pulldown .menuParent > .select {display:block;background:#fff;border-radius:3px;}
-    .pulldown .menuParent.open > * {display:block;background:#f0f0f0;}
-    .pulldown .menuParent > .menu.selected {font-weight:bold;}
-    .pulldown .menuParent.open > .select::before { content:''; position:absolute; border-radius:50%; background:#66BB6A; width:24px; height:24px; left:-35px; top:50%; transform:translateY(-50%); }
-  </style>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/${API.setting.get('highlight')}.min.css">
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
-</head>
-<body>
-  <div>Dev Tools for &quot;<button id='toParent' class='show-a'>${document.title}</button>&quot;</div>
-  <nav id="tab" role="tablist">
-    <button role="tab" class="Elements" draggable="true">Elements</button>
-    <button role="tab" class="Console" draggable="true">Console</button>
-    <button role="tab" class="Network" draggable="true">Network</button>
-    <button role="tab" class="Selected" draggable="true">Selected</button>
-    <button role="tab" class="Info" draggable="true">Info</button>
-    <button role="tab" class="Events" draggable="true">Events</button>
-    <button role="tab" class="Setting" draggable="true">Setting</button>
-  </nav>
-  <div id="content">
-    <div class="Elements"><pre><code class="language-html">&lt;!DOCTYPE html&gt;\n${document.documentElement.outerHTML.replace(/<div[^>]*id=["']DBG_PANEL["'][^>]*>[\s\S]*?<\/div>/gi, "").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</code></pre></div>
-    <div class="Console"><label class="text-wrapper"><textarea id="playCode"></textarea></label><div id="log">${htmlLogs}</div></div>
-    <div class="Network">under implementation</div>
-    <div class="Selected">No Element Selected</div>
-    <div class="Info">
-      <h2>dbg.min.js Tool Information</h2>
-      <p><strong>dbg.min.js</strong> is a lightweight in‑browser debugging utility. 
-      It helps developers inspect DOM elements, monitor events, track network requests, 
-      and capture console logs without relying on the built‑in browser DevTools.</p>
-    </div>
-    <div class="Events">under implementation</div>
-    <div class="Setting">
-      <h3>Setting</h3>
-      <label class="pulldownParent">
-        Theme: 
-        <div class="pulldown">
-          <div class="menuParent open">
-            <label class="menu select">Light</label>
-            <label class="menu">Dark</label>
-          </div>
-        </div>
-      </label>
-    </div>
-  </div>
-<script>
-hljs.highlightAll();
-window.addEventListener('beforeunload', () => {
-  window.opener.postMessage({ type: 'closed' }, '*');
-});
+                  <h4>Source Code</h4>
+                  <p>Here is the <a href="https://github.com/ysas4331/dbg/tree/main/dbg.js" target="_blank" rel="noopener noreferrer">Source Code</a></p>
+                  
+                </div>
+                <div class="Events">under implementation</div>
+                <div class="Setting">
+                  <h3>Setting</h3>
+                  <h4>UX</h4>
+                  <label>Theme: <div class="select" tabindex="0" id="set-Theme"> <div class="option"> <label>Light</label> <label>Dark</label> <label>Device</label></div></div>
+                  <label>Highlight: <div class="select" tabindex="0" id="set-Highlight"> <div class="option"><label>default</label><label>a11y-dark</label><label>a11y-light</label><label>agate</label><label>an-old-hope</label><label>androidstudio</label><label>arduino-light</label><label>arta</label><label>ascetic</label><label>atom-one-dark</label><label>atom-one-light</label><label>brown-paper</label><label>codepen-embed</label><label>color-brewer</label><label>dark</label><label>devibeans</label><label>docco</label><label>dracula</label><label>far</label><label>felipec</label><label>foundation</label><label>github</label><label>github-dark</label><label>gml</label><label>googlecode</label><label>gradient-dark</label><label>gradient-light</label><label>gruvbox-dark</label><label>gruvbox-light</label><label>hopscotch</label><label>hybrid</label><label>idea</label><label>intellij-light</label><label>ir-black</label><label>isbl-editor-dark</label><label>isbl-editor-light</label><label>kimbie-dark</label><label>kimbie-light</label><label>lightfair</label><label>lioshi</label><label>magula</label><label>mono-blue</label><label>monokai</label><label>monokai-sublime</label><label>night-owl</label><label>nnfx-dark</label><label>nnfx-light</label><label>nord</label><label>obsidian</label><label>paraiso-dark</label><label>paraiso-light</label><label>pojoaque</label><label>purebasic</label><label>qtcreator-dark</label><label>qtcreator-light</label><label>rainbow</label><label>routeros</label><label>school-book</label><label>shades-of-purple</label><label>srcery</label><label>stackoverflow-dark</label><label>stackoverflow-light</label><label>sunburst</label><label>tokyo-night-dark</label><label>tokyo-night-light</label><label>tomorrow-night-blue</label><label>tomorrow-night-bright</label><label>tomorrow-night-eighties</label><label>tomorrow-night</label><label>vs</label><label>vs2015</label><label>xcode</label><label>xt256</label><label>zenburn</label></div></div></label>
+                  <hr>
+                  <h4>Log</h4>
+                  <label>Max: <input type="text" value="1000"></label>
+                </div>
+              <script>
+              hljs.highlightAll();
+              window.addEventListener('beforeunload', () => {
+                window.opener.postMessage({ type: 'closed' }, '*');
+              });
+              
+              let tabs = document.querySelectorAll('#tab > *');
+              
+              tabs.forEach(el => {
+                el.onclick = () => {
+                  const others = Array.from(tabs).filter(item => item !== el);
+                  others.forEach(el => {
+                    el.classList.remove('active');
+                    el.setAttribute('aria-selected', 'false');
+                  });
+                  el.classList.add('active');
+                  el.setAttribute('aria-selected', 'true');
+                  const elType = Array.from(el.classList).find(cls => cls !== 'active');
+                  const contents = document.querySelectorAll('#content > *');
+                  contents.forEach(el => el.style.display = 'none');
+                  document.querySelector('#content > .' + elType).style.display = 'block';
+                };
+              });
+              
+              document.querySelector('#tab > .Elements').click();
+              
+              document.querySelector('#toParent').onclick = () => {
+                window.opener.postMessage({ type: 'focus' }, '*');
+              };
+              document.querySelector('#playCode').addEventListener('keydown', (e) => {
+                const value = e.target.value.trim();
+                if (!value) return;
+                if (e.key.toLowerCase() === 'enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  window.opener.postMessage({ type: 'playCode', code: value }, '*');
+                  e.target.value = '';
+                }
+              });
+              
+              let draggedTab = null;
+              const nav = document.getElementById('tab');
+              
+              nav.querySelectorAll('button').forEach(tab => {
+                tab.addEventListener('dragstart', e => {
+                  draggedTab = tab;
+                  e.dataTransfer.effectAllowed = 'move';
+                });
+              
+                tab.addEventListener('dragover', e => {
+                  e.preventDefault();
+                  const bounding = tab.getBoundingClientRect();
+                  const offset = e.clientX - bounding.left;
+                  nav.insertBefore(draggedTab, offset > bounding.width / 2 ? tab.nextSibling : tab);
+                });
+              
+                tab.addEventListener('dragend', () => {
+                  draggedTab = null;
+                  tabs = document.querySelectorAll('#tab > *');
+                });
+              });
+              document.addEventListener('keydown', (e) => {
+                const mod = navigator.platform.includes('Mac') ? e.metaKey : e.ctrlKey;
+                const keyValue = Number(e.key);
+                if (!mod) return;
+                if (e.key === 'Tab') {
+                  e.preventDefault();
+                  const direction = e.shiftKey ? -1 : 1;
+              
+                  const tabs = document.querySelectorAll('#tab > *');
+                  let current = Array.from(tabs).findIndex(t => t.classList.contains('active'));
+                  if (current === -1) current = 0;
+              
+                  let next = (current + direction + tabs.length) % tabs.length;
+                  tabs[next].click();
+                } else if (!isNaN(keyValue) && keyValue == 9) {
+                  tabs[tabs.length-1].click();
+                  return;
+                } else if (!isNaN(keyValue) && keyValue >= 1 && keyValue <= tabs.length) {
+                  tabs[keyValue-1].click();
+                }
+              });
+              (() => {
+                function setupSelect(root) {
+                  const optionBox = root.querySelector('.option')
+                  const labels = [...optionBox.querySelectorAll('label')]
+              
+                  const dis = document.createElement('div')
+                  dis.className = 'select-dis'
+              
+                  const val = document.createElement('span')
+                  val.className = 'select-value'
+                  val.textContent = 'Please select'
+              
+                  const arrow = document.createElement('span')
+                  arrow.className = 'select-arrow'
+                  arrow.textContent = '▼'
+              
+                  dis.appendChild(val)
+                  dis.appendChild(arrow)
+                  root.insertBefore(dis, optionBox)
+              
+                  const placeholder = document.createElement('label')
+                  placeholder.textContent = 'Please select'
+                  optionBox.insertBefore(placeholder, optionBox.firstChild)
+              
+                  const allOptions = [...optionBox.querySelectorAll('label')]
+                  let index = -1
+              
+                  const searchInput = document.createElement('input')
+                  searchInput.type = 'text'
+                  searchInput.className = 'select-search'
+                  searchInput.placeholder = 'Search...'
+                  searchInput.classList.add('NoBorder');
+                  optionBox.prepend(searchInput)
+              
+                  function levenshtein(a, b) {
+                    const dp = Array.from({ length: a.length + 1 }, () =>
+                      Array(b.length + 1).fill(0)
+                    )
+                  
+                    for (let i = 0; i <= a.length; i++) dp[i][0] = i
+                    for (let j = 0; j <= b.length; j++) dp[0][j] = j
+                  
+                    for (let i = 1; i <= a.length; i++) {
+                      for (let j = 1; j <= b.length; j++) {
+                        if (a[i - 1] === b[j - 1]) {
+                          dp[i][j] = dp[i - 1][j - 1]
+                        } else {
+                          dp[i][j] = Math.min(
+                            dp[i - 1][j] + 1,
+                            dp[i][j - 1] + 1,
+                            dp[i - 1][j - 1] + 1
+                          )
+                        }
+                      }
+                    }
+                    return dp[a.length][b.length]
+                  }
+                  
+                  searchInput.addEventListener('input', () => {
+                    const keyword = searchInput.value.toLowerCase()
+                  
+                    labels.forEach(label => {
+                      if (!keyword) {
+                        label.style.display = ''
+                        return
+                      }
+                  
+                      const text = label.textContent.toLowerCase()
+                      if (text.includes(keyword)) {
+                        label.style.display = '';
+                        return;
+                      }
+                      const distance = levenshtein(text, keyword)
+                  
+                      const threshold = Math.ceil(keyword.length * 0.2)
+                  
+                      label.style.display = distance <= threshold ? '' : 'none'
+                    })
+                  })
+              
+                  function open() {
+                    document.querySelectorAll('.select').forEach(el => el.classList.remove('open'))
+                    root.classList.add('open')
 
-// タブ切替
-let tabs = document.querySelectorAll('#tab > *');
-tabs.forEach(el => {
-  el.onclick = () => {
-    const others = Array.from(tabs).filter(item => item !== el);
-    others.forEach(el => {
-      el.classList.remove('active');
-      el.setAttribute('aria-selected', 'false');
-    });
-    el.classList.add('active');
-    el.setAttribute('aria-selected', 'true');
-    const elType = Array.from(el.classList).find(cls => cls !== 'active');
-    const contents = document.querySelectorAll('#content > *');
-    contents.forEach(el => el.style.display = 'none');
-    document.querySelector('#content > .' + elType).style.display = 'block';
-  };
-});
-document.querySelector('#tab > .Elements').click();
-
-document.querySelector('#toParent').onclick = () => {
-  window.opener.postMessage({ type: 'focus' }, '*');
-};
-document.querySelector('#playCode').addEventListener('keydown', (e) => {
-  const value = e.target.value.trim();
-  if (!value) return;
-  if (e.key.toLowerCase() === 'enter' && !e.shiftKey) {
-    e.preventDefault();
-    window.opener.postMessage({ type: 'playCode', code: value }, '*');
-    e.target.value = '';
-  }
-});
-
-// タブドラッグ
-let draggedTab = null;
-const nav = document.getElementById('tab');
-nav.querySelectorAll('button').forEach(tab => {
-  tab.addEventListener('dragstart', e => {
-    draggedTab = tab;
-    e.dataTransfer.effectAllowed = 'move';
-  });
-  tab.addEventListener('dragover', e => {
-    e.preventDefault();
-    const bounding = tab.getBoundingClientRect();
-    const offset = e.clientX - bounding.left;
-    nav.insertBefore(draggedTab, offset > bounding.width / 2 ? tab.nextSibling : tab);
-  });
-  tab.addEventListener('dragend', () => { draggedTab = null; tabs = document.querySelectorAll('#tab > *'); });
-});
-
-// タブショートカット
-document.addEventListener('keydown', (e) => {
-  const mod = navigator.platform.includes('Mac') ? e.metaKey : e.ctrlKey;
-  const keyValue = Number(e.key);
-  if (!mod) return;
-  if (e.key === 'Tab') {
-    e.preventDefault();
-    const direction = e.shiftKey ? -1 : 1;
-    let current = Array.from(tabs).findIndex(t => t.classList.contains('active'));
-    if (current === -1) current = 0;
-    let next = (current + direction + tabs.length) % tabs.length;
-    tabs[next].click();
-  } else if (!isNaN(keyValue) && keyValue >= 1 && keyValue <= tabs.length) {
-    tabs[keyValue-1].click();
-  }
-});
-
-// 汎用カスタムプルダウン
-document.querySelectorAll('.pulldownParent').forEach(wrapper => {
-  const pulldown = wrapper.querySelector('.pulldown');
-  const menuParent = pulldown.querySelector('.menuParent');
-  const selected = menuParent.querySelector('.select');
-  const options = Array.from(menuParent.querySelectorAll('.menu')).filter(m => m !== selected);
-
-  selected.addEventListener('click', (e) => {
-    e.stopPropagation();
-    menuParent.classList.toggle('open');
-  });
-
-  options.forEach(opt => {
-    opt.addEventListener('click', (e) => {
-      e.stopPropagation();
-      selected.textContent = opt.textContent;
-      menuParent.querySelectorAll('.menu').forEach(m => m.classList.remove('selected'));
-      opt.classList.add('selected');
-      menuParent.classList.remove('open');
-      const event = new CustomEvent('change', { detail: opt.textContent });
-      wrapper.dispatchEvent(event);
-    });
-  });
-
-  document.addEventListener('click', () => {
-    menuParent.classList.remove('open');
-  });
-});
-</script>
-</body>
-</html>
+                    const rect = root.getBoundingClientRect()
+                    const optionHeight = optionBox.scrollHeight || 200
+                    const spaceBelow = window.innerHeight - rect.bottom
+                    const spaceAbove = rect.top
+                  
+                    if (spaceBelow < optionHeight && spaceAbove > spaceBelow) {
+                      optionBox.style.top = 'auto'
+                      optionBox.style.bottom = 'calc(100% + 5px)'
+                    } else {
+                      optionBox.style.top = 'calc(100% + 5px)'
+                      optionBox.style.bottom = 'auto'
+                    }
+                  }
+                  function close() {
+                    root.classList.remove('open')
+                  }
+                  function choose(i) {
+                    index = i
+                    allOptions.forEach(o => o.classList.remove('active'))
+                    allOptions[i].classList.add('active')
+                    val.textContent = allOptions[i].textContent
+                    searchInput.value = '';
+                    close()
+                    document.dispatchEvent(new CustomEvent('selectChanged', {
+                      detail: { root, value: allOptions[i].textContent, index: i }
+                    }))
+                  }
+              
+                  dis.addEventListener('click', () => {
+                    root.classList.contains('open') ? close() : open()
+                  })
+              
+                  allOptions.forEach((opt, i) => {
+                    opt.addEventListener('click', e => {
+                      choose(i)
+                      e.stopPropagation()
+                    })
+                  })
+              
+                  root.addEventListener('keydown', e => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      if (!root.classList.contains('open')) open()
+                      else if (index >= 0) choose(index)
+                      e.preventDefault()
+                    }
+                    if (e.key === 'ArrowDown') {
+                      if (!root.classList.contains('open')) open()
+                      index = (index + 1) % allOptions.length
+                      highlight(index)
+                      e.preventDefault()
+                    }
+                    if (e.key === 'ArrowUp') {
+                      if (!root.classList.contains('open')) open()
+                      index = (index - 1 + allOptions.length) % allOptions.length
+                      highlight(index)
+                      e.preventDefault()
+                    }
+                    if (e.key === 'Escape') close()
+                  })
+              
+                  function highlight(i) {
+                    allOptions.forEach(o => o.classList.remove('active'))
+                    allOptions[i].classList.add('active')
+                  }
+                }
+              
+                document.querySelectorAll('.select').forEach(setupSelect)
+              
+                document.addEventListener('click', e => {
+                  if (!e.target.closest('.select')) {
+                    document.querySelectorAll('.select.open').forEach(sel => sel.classList.remove('open'))
+                  }
+                })
+              
+                document.addEventListener('selectChanged', e => {
+                  if (e.detail.value === 'Please select') e.detail.value = '';
+                  const { root, value } = e.detail;
+                  switch (root.id) {
+                    case 'set-Theme':
+                      window.opener.postMessage({ type: 'API', root: 'setting', key: 'theme', value: value }, '*');
+                      break;
+                    case 'set-Highlight':
+                      window.opener.postMessage({ type: 'API', root: 'setting', key: 'highlight', value: value || "vs" }, '*');
+                      break;
+                    default:
+                      break;
+                  }
+                })
+              })()
+              </script>
+            </body>
+          </html>
           `);
           Win.document.close();
         }
